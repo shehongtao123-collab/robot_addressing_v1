@@ -1,0 +1,47 @@
+# Evaluation output
+results/
+
+# Local model/judge profiles may contain API keys
+config/model_profiles.json
+config/judge_profiles.json
+models.json
+judges.json
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Local agent/cloud configuration
+.agents/
+.aws/
+.codex/
+
+# Python bytecode, caches and coverage output
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+
+# IDE and operating-system metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
