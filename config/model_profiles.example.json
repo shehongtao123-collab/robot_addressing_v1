@@ -1,0 +1,21 @@
+{
+  "models": [
+    {
+      "name": "bailian",
+      "model": "your-model-id",
+      "base_url": "https://your-openai-compatible-endpoint/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_key": "",
+      "timeout_seconds": 60,
+      "request_options": {
+        "max_completion_tokens": 128
+      },
+      "extra_body": {
+        "enable_thinking": false,
+        "chat_template_kwargs": {
+          "enable_thinking": false
+        }
+      }
+    }
+  ]
+}

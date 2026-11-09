@@ -97,7 +97,13 @@ candidate = dataset_result(call.function.name, arguments)
 
 默认每轮包含相同的 150 条人类发言，每个模型独立运行，不使用上次模型的输出作为下次的历史，也不把前一轮对话重复累加到下一轮。默认 `--rounds 1`。每次执行创建新的结果目录，历史结果保留；只保存 `results/<批次>/details.json` 原始记录，不提前生成统计报告。页面每次刷新时读取当前原始记录并在内存中统计。同一个服务端模型 ID 与同一个数据集 SHA-256 的结果合并在一张表中，测试次数跨命令累计；原始运行批次、配置名称和局部轮次保留在明细数据中。
 
-有鉴权的接口请设置模型配置中 `api_key_env` 指定的环境变量，例如 `OPENAI_API_KEY`。该环境变量优先于配置中的 `api_key`。当前示例的 `api_key: EMPTY` 适用于无鉴权的本地或兼容服务；需要真实密钥的服务应通过环境变量提供。
+首次使用时复制安全模板：
+
+```bash
+cp config/model_profiles.example.json config/model_profiles.json
+```
+
+真实的 `config/model_profiles.json` 已被 `.gitignore` 排除，不会提交 API Key；`config/model_profiles.example.json` 不含密钥，用于共享配置结构。有鉴权的接口请设置模型配置中 `api_key_env` 指定的环境变量，例如 `OPENAI_API_KEY`。该环境变量优先于配置中的 `api_key`。无鉴权的本地或兼容服务可以将 `api_key` 留空；需要真实密钥的服务应通过环境变量提供。
 
 ## 配置不同模型
 

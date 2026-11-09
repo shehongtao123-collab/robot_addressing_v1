@@ -1,5 +1,6 @@
-# Evaluation output
-results/
+# Evaluation output (keep the empty directory itself in Git)
+results/*
+!results/.gitkeep
 
 # Local model/judge profiles may contain API keys
 config/model_profiles.json
