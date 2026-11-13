@@ -1,0 +1,26 @@
+[Unit]
+Description=Robot Evaluation read-only report service
+After=network.target
+
+[Service]
+Type=simple
+User=robot-eval
+Group=robot-eval
+WorkingDirectory=/opt/robot_addressing_v1
+ExecStart=/opt/robot_addressing_v1/.venv/bin/python /opt/robot_addressing_v1/evaluate.py serve --host 127.0.0.1 --port 8786 --results-directory /opt/robot_addressing_v1/results
+Restart=on-failure
+RestartSec=3
+Environment=PYTHONDONTWRITEBYTECODE=1
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+ReadOnlyPaths=/opt/robot_addressing_v1
+
+[Install]
+WantedBy=multi-user.target

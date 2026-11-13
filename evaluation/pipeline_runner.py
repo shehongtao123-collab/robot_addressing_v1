@@ -242,7 +242,7 @@ async def run_evaluations(args, include_results=False):
                 "history_label_source": "dataset gold labels for previous utterances only; current target label withheld",
                 "history_mode": "fixed transcript with labeled prior human utterances; classify current target only"}
     if include_results:
-        metadata.update({"result_validator": {"type": "deterministic_local", "version": 1},
+        metadata.update({"result_validator": {"type": "deterministic_local", "version": 2},
                          "result_prompt_sha256": hashlib.sha256(result_prompt.encode()).hexdigest(),
                          "response_references_per_round": len(response_answers)})
     results = []

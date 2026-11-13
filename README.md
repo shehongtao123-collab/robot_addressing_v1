@@ -4,7 +4,7 @@
 
 ## 项目结构
 
-项目自带 `datasets/conversation.jsonl`、`datasets/intent_300.jsonl` 和 `datasets/intent_600.jsonl`。每个文件都是一段连续对话；人类发言用于意图识别，紧邻 addressing case 的机器人发言作为回复标准答案。参与者、机器人名称、样本数量和标签分布均在运行时从所选数据集读取。
+项目自带 `datasets/conversation.jsonl`、`datasets/intent_300_v1.jsonl`、`datasets/intent_300_v2.jsonl`、`datasets/intent_300_v3.jsonl` 和 `datasets/intent_600_v1.jsonl`。每个文件都是一段连续对话；人类发言用于意图识别，紧邻 addressing case 的机器人发言作为回复标准答案。参与者、机器人名称、样本数量和标签分布均在运行时从所选数据集读取。`intent_300_v2.jsonl` 是第二套 300 行回归数据，包含更新后的酒店话题、40 个方法调用和 10 个纯文本标准答案。`intent_300_v3.jsonl` 是面向短音频的 300 行数据，全部人类话语均为紧凑短句，对机器人的50条请求以迎宾、酒店问询和简短服务指令为主，适合进一步合成并筛选 3 秒以内的音频。
 
 | 目录或文件 | 用途 |
 | --- | --- |
@@ -22,7 +22,7 @@
 
 ## 安装与运行
 
-Python 3.10+，在本目录运行，不需要激活开发容器：
+Python 3.11+（推荐使用你当前的 `py312` 环境），在本目录运行，不需要激活开发容器：
 
 ```bash
 python3 -m venv .venv
@@ -45,27 +45,28 @@ python evaluate.py run --task intent --config my_models.json --prompt prompts/in
 python evaluate.py run --limit 3 --rounds 2
 
 # 切换到其他数据集
-python evaluate.py validate --dataset datasets/intent_300.jsonl
-python evaluate.py run --dataset datasets/intent_300.jsonl --limit 3
-python evaluate.py run --task intent --dataset datasets/intent_600.jsonl --rounds 1
+python evaluate.py validate --dataset datasets/intent_300_v1.jsonl
+python evaluate.py run --dataset datasets/intent_300_v1.jsonl --limit 3
+python evaluate.py run --task intent --dataset datasets/intent_600_v1.jsonl --rounds 1
 
 # 流水线模式：使用前 3 条人类 case 做冒烟测试
-python evaluate.py run --dataset datasets/intent_300.jsonl --limit 3
+python evaluate.py run --dataset datasets/intent_300_v1.jsonl --limit 3
 
 # 完整运行流水线
-python evaluate.py run --dataset datasets/intent_300.jsonl --rounds 1
+python evaluate.py run --dataset datasets/intent_300_v1.jsonl --rounds 1
 ```
 
 `--dataset` 接受与 `datasets/conversation.jsonl` 相同字段结构的 JSONL 文件。参与者、机器人名称、会话 ID、发言数量和标签分布均从所选数据集动态读取；每次结果按数据集 SHA-256 分组，不会与其他数据集混合统计。`validate`、`run` 和 `score` 都支持该参数。
 
-`run` 不带 `--task` 时使用逐 case 流水线：每条人类发言先进行意图识别；预测为 `ignore` 时记录意图结果并直接进入下一条；预测为 `addressing` 且数据集为该 case 提供了紧邻的机器人标准回复时，再调用被测模型生成正式回复并判断正确性。两阶段原始数据保存在同一条 case 记录和同一个 `results/<批次>/details.json` 中，意图页面与结果页面分别读取各自指标。漏判为 `ignore` 的 addressing case 不生成回复，并在结果指标中记为未覆盖/失败；误判为 addressing 但没有标准回复的 case 记录为无参考答案，不计入回复准确率。明确增加 `--task intent` 时只执行意图识别，不生成回复。结果判断完全使用本地确定性规则：方法调用必须来自原生 `tool_calls`，参数按 schema、枚举、类型和标准答案校验；自然语言参数与普通文本按关键词包含情况校验，不调用裁判模型。
+`run` 不带 `--task` 时使用逐 case 流水线：每条人类发言先进行意图识别；预测为 `ignore` 时记录意图结果并直接进入下一条；预测为 `addressing` 且数据集为该 case 提供了紧邻的机器人标准回复时，再调用被测模型生成正式回复并判断正确性。两阶段原始数据保存在同一条 case 记录和同一个 `results/<批次>/details.json` 中，意图页面与结果页面分别读取各自指标。漏判为 `ignore` 的 addressing case 不生成回复，并在结果指标中记为未覆盖/失败；误判为 addressing 但没有标准回复的 case 记录为无参考答案，不计入回复准确率。明确增加 `--task intent` 时只执行意图识别，不生成回复。结果判断完全使用本地确定性规则：方法调用必须来自原生 `tool_calls`，参数按 schema、枚举、类型和标准答案校验；自然语言参数与普通文本先检查关键词和关键事实，未命中时使用本地 FastEmbed 中文向量计算语义相似度，不调用裁判模型。
 
 结果判断使用独立文件：
 
 | 文件 | 用途 |
 | --- | --- |
 | `prompts/response_generation.md` | 待测模型生成回复的 system 提示词 |
-| `evaluation/local_result_validator.py` | 原生工具调用、JSON 参数和文本关键词本地校验 |
+| `evaluation/local_result_validator.py` | 原生工具调用、JSON 参数、关键事实和文本语义校验 |
+| `evaluation/text_embeddings.py` | 延迟加载 FastEmbed 中文 ONNX 模型并计算余弦相似度 |
 | `evaluation/response_runner.py` | 回复模型调用与原生 tool call 解析 |
 | `reporting/response_reports.py` | 结果判断汇总、单次运行与明细报告 |
 | `hotel_tools/mock_functions.py` | function calling schema 与本地无副作用伪工具 |
@@ -94,6 +95,17 @@ candidate = dataset_result(call.function.name, arguments)
 ```
 
 默认评测流水线已经接入这些定义：回复标准答案为 `methed` JSON 时，模型必须返回一个原生 `tool_calls` 函数调用。函数名不存在、参数不是合法 JSON、字段缺失/多余、类型错误或返回多个调用都会直接判为模型调用失败；普通文本标准答案仍允许直接返回文本。
+
+中文语义容错默认使用 `BAAI/bge-small-zh-v1.5`，首次遇到需要语义兜底的文本时才加载模型，之后在同一进程内复用。默认余弦相似度阈值是 `0.72`。可通过环境变量调整模型和阈值：
+
+```bash
+export RESULT_EMBEDDING_MODEL=BAAI/bge-small-zh-v1.5
+export RESULT_EMBEDDING_THRESHOLD=0.72
+# 默认缓存位置是项目内 .cache/fastembed，也可以自行指定：
+export RESULT_EMBEDDING_CACHE=/your/local/fastembed/cache
+```
+
+向量相似度只用于 `reason`、`notes`、`query`、`issue` 等自然语言字段及纯文本答案。工具名、枚举、布尔值、房间号等结构化字段仍严格比较；数字缺失或“允许/不允许”等直接矛盾不能被向量高分覆盖。若 FastEmbed 或模型不可用，评测不会崩溃，该文本会保留为校验失败并在详情中记录原因。
 
 默认每轮包含相同的 150 条人类发言，每个模型独立运行，不使用上次模型的输出作为下次的历史，也不把前一轮对话重复累加到下一轮。默认 `--rounds 1`。每次执行创建新的结果目录，历史结果保留；只保存 `results/<批次>/details.json` 原始记录，不提前生成统计报告。页面每次刷新时读取当前原始记录并在内存中统计。同一个服务端模型 ID 与同一个数据集 SHA-256 的结果合并在一张表中，测试次数跨命令累计；原始运行批次、配置名称和局部轮次保留在明细数据中。
 
@@ -154,7 +166,9 @@ python3 evaluate.py serve
 # 可用 --port 修改端口，Ctrl+C 停止服务
 ```
 
-该服务提供两个静态页面，并在每次页面读取时扫描当前测试目录、在内存中计算汇总和明细 JSON，不需要安装 Web 框架、前端依赖或构建工具。浏览器的 `file://` 限制会阻止 fetch 读取本地 JSON，因此请使用上面的 HTTP 地址。服务默认只监听本机。增加或删除测试目录后，刷新页面即可按当前目录重新计算次数和准确率。删除全部测试后显示 0 次及空表，不沿用旧合并文件。请使用 `python evaluate.py serve`；通用静态文件服务不提供实时统计接口。
+该服务提供六个静态页面，并在页面读取时扫描当前测试目录、在内存中计算汇总和明细 JSON，不需要安装 Web 框架、前端依赖或构建工具。浏览器的 `file://` 限制会阻止 fetch 读取本地 JSON，因此请使用上面的 HTTP 地址。服务默认只监听本机。增加或删除测试目录后，刷新页面即可按当前目录重新计算次数和准确率。删除全部测试后显示 0 次及空表，不沿用旧合并文件。请使用 `python evaluate.py serve`；通用静态文件服务不提供实时统计接口。
+
+服务采用只读白名单，只公开六个报告页面、图标和报告数据接口，不公开配置、数据集或源码；`/healthz` 用于健康检查。公司内网长期运行时不要直接暴露 Python 端口，应通过 Nginx 限制允许访问的公司网段，具体步骤见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 
 每次运行在 `results/<北京时间>/` 下只保存一份 `details.json` 原始记录，例如 `20261105T130944297509`。其中 `details.json` 包含模型配置、提示词摘要、每轮/每次调用的时间、目标标签、预测结果、完整 request、response、usage 和错误。每条完成后立即保存，中断时保留已经产生的记录。不会提前生成 `summary.json`、合并明细或 HTML 报告。
@@ -201,6 +215,44 @@ request 捕获的是 OpenAI SDK 实际构造并提交给 HTTP 客户端的 JSON 
 ## 历史报告与完整指标
 
 意图识别指标的审核口径、公式、混淆计数和完整示例见 [REPORT_METRICS_GUIDE.md](REPORT_METRICS_GUIDE.md)。
+
+## PCM 实时 WebSocket 意图评测
+
+`evaluate_wss.py` 使用百炼 `qwen3.8-omni-flash-realtime`，将无文件头的单声道 PCM 音频按真实时间分片上传。音频必须为 16 kHz、16-bit、signed little-endian。默认流程与 `evaluate.py` 一致：先识别意图；预测为 `addressing` 且数据集存在标准回复时，再用独立 WSS 会话重新上传同一段 PCM，生成正式文本或原生 Function Calling，并通过本地确定性校验器判断结果。脚本沿用现有结果目录和意图/结果报告页面；意图和结果调用各自的 `latency_seconds` 都表示发送 `response.create` 后收到首个实际输出包的耗时。
+
+播放列表沿用当前音频播放列表的数组结构，`filepath` 为绝对路径，文件扩展名为 `.pcm`，文件名中包含用例 ID（如 `u001`）。生成 PCM 后先做离线校验：
+
+```bash
+python evaluate_wss.py validate \
+  --playlist /absolute/path/to/playlist.json \
+  --dataset datasets/intent_300_v1.jsonl
+```
+
+确认无误后运行：
+
+```bash
+python evaluate_wss.py run \
+  --playlist /absolute/path/to/playlist.json \
+  --dataset datasets/intent_300_v1.jsonl \
+  --profile bailian \
+  --model qwen3.8-omni-flash-realtime \
+  --rounds 1
+```
+
+上面的命令默认执行“意图识别 + 返回结果判断”。如果只测试意图识别，不发起第二次结果生成请求：
+
+```bash
+python evaluate_wss.py run \
+  --task intent \
+  --playlist /absolute/path/to/playlist.json \
+  --dataset datasets/intent_300_v1.jsonl
+```
+
+`--profile bailian` 会从 `config/model_profiles.json` 的 `base_url` 提取 Workspace ID，并从同一配置或其 `api_key_env` 读取 API Key，不需要另外传 Workspace ID。默认每 20 ms 上传一包并按音频时长等待；仅调试协议时可用 `--limit 1 --realtime-factor 0` 快速上传。明细记录还包含连接耗时、音频上传耗时、`response.created` 首事件耗时、文本首包耗时及完整响应耗时。
+
+每个用例的历史多轮对话会序列化为一个带原始 `role`、内容和历史标签的 JSON 快照，只发送一次 `conversation.item.create` 并等待一次确认；当前待测句不写入快照，只通过 PCM 上传。这样避免随着用例序号增长而逐条发送、逐条等待数百次历史消息确认，同时保留完整历史顺序。
+
+结果生成阶段的历史快照不附带意图标准标签，只包含原始历史角色和文本；当前请求仍只来自 PCM。标准答案只在本地校验时使用，不会发送给被测模型。Realtime 不支持 `tool_choice`，因此脚本通过 `session.update.session.tools` 注册全部本地伪工具，并由结果提示词要求需要工具的请求必须返回原生 Function Calling。
 
 日常查看入口包括意图识别的 `templates/summary.html`、`templates/runs.html`、`templates/details.html`，以及结果判断的 `templates/result_summary.html`、`templates/result_runs.html`、`templates/result_details.html`。每次打开或刷新页面时重新计算，没有预先生成的汇总文件。以下命令只显示页面入口，不写统计报告：
 

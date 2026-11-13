@@ -20,6 +20,8 @@ def result_statistics(rows):
         return row.get("judgment") or {}
 
     total = len(rows)
+    result_calls = [candidate(row) for row in rows if row.get("candidate_call") is not None]
+    usage_calls = [call for call in result_calls if isinstance(call.get("usage"), dict)]
     passed = sum(bool(row.get("passed")) for row in rows)
     valid = sum(row.get("result_status", "evaluated") == "evaluated"
                 and not candidate(row).get("error")
@@ -45,6 +47,9 @@ def result_statistics(rows):
                                        and not candidate(row).get("error") for row in rows),
             "result_types": dict(types), "json_error_types": dict(error_types),
             "latency": latency_statistics(rows),
+            "result_call_count": len(result_calls),
+            "result_usage_count": len(usage_calls),
+            "missing_usage_count": len(result_calls) - len(usage_calls),
             "input_tokens": sum(row.get("input_tokens") or 0 for row in rows),
             "output_tokens": sum(row.get("output_tokens") or 0 for row in rows),
             "total_tokens": sum(row.get("total_tokens") or 0 for row in rows)}

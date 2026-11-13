@@ -181,6 +181,8 @@ def main():
     viewer = commands.add_parser("serve", help="Serve the two static report viewers over local HTTP")
     viewer.add_argument("--host", default="127.0.0.1")
     viewer.add_argument("--port", type=int, default=8786)
+    viewer.add_argument("--results-directory", type=Path, default=ROOT / "results",
+                        help="Read-only results directory exposed through the report API")
     validator = commands.add_parser("validate", help="Check chronology, participants, labels and silence state")
     validator.add_argument("--dataset", type=Path, default=DATASET_PATH)
     runner = commands.add_parser("run", help="Run independent OpenAI SDK evaluations and write two reports")
@@ -215,7 +217,8 @@ def main():
         if args.command == "serve":
             from reporting.server import ReportHTTPServer
             require(1 <= args.port <= 65535, "port must be between 1 and 65535")
-            server = ReportHTTPServer((args.host, args.port), ROOT)
+            server = ReportHTTPServer((args.host, args.port), ROOT,
+                                      results_directory=args.results_directory)
             print(f"SUMMARY_PAGE: http://{args.host}:{server.server_port}/templates/summary.html", flush=True)
             print(f"RUNS_PAGE: http://{args.host}:{server.server_port}/templates/runs.html", flush=True)
             print(f"DETAILS_PAGE: http://{args.host}:{server.server_port}/templates/details.html", flush=True)

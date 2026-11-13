@@ -43,7 +43,7 @@ class ResultEvaluationTests(unittest.TestCase):
             parse_text_judgment(json.dumps({**valid, "unexpected": True}))
 
     def test_dataset_robot_results_become_samples(self):
-        samples = result_samples(Path("datasets/intent_300.jsonl"))
+        samples = result_samples(Path("datasets/intent_300_v1.jsonl"))
         self.assertEqual(len(samples), 50)
         self.assertEqual(samples[0]["id"], "u005")
         self.assertIn("联系安保", samples[0]["user_request"])
@@ -67,6 +67,28 @@ class ResultEvaluationTests(unittest.TestCase):
         self.assertEqual(statistics["candidate_failures"], 0)
         self.assertEqual(statistics["validation_failures"], 0)
         self.assertEqual(statistics["total"], 1)
+        self.assertEqual(statistics["result_call_count"], 0)
+        self.assertEqual(statistics["missing_usage_count"], 0)
+
+    def test_result_statistics_reports_result_generation_tokens_and_missing_usage(self):
+        rows = [
+            {"passed": True, "result_status": "evaluated", "result_type": "text",
+             "candidate_call": {"usage": {"prompt_tokens": 100, "completion_tokens": 7,
+                                            "total_tokens": 107}},
+             "judgment": {}, "latency_seconds": 1.0,
+             "input_tokens": 100, "output_tokens": 7, "total_tokens": 107},
+            {"passed": False, "result_status": "evaluated", "result_type": "json",
+             "candidate_call": {"usage": None, "error": "network error"},
+             "judgment": {}, "latency_seconds": 2.0,
+             "input_tokens": None, "output_tokens": None, "total_tokens": None},
+        ]
+        statistics = result_statistics(rows)
+        self.assertEqual(statistics["result_call_count"], 2)
+        self.assertEqual(statistics["result_usage_count"], 1)
+        self.assertEqual(statistics["missing_usage_count"], 1)
+        self.assertEqual(statistics["input_tokens"], 100)
+        self.assertEqual(statistics["output_tokens"], 7)
+        self.assertEqual(statistics["total_tokens"], 107)
 
 
 if __name__ == "__main__":

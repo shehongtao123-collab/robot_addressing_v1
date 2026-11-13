@@ -9,6 +9,7 @@ from threading import Thread
 import unittest
 from unittest.mock import patch
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 from evaluate import DATASET_PATH, validate
 from reporting.intent_reports import write_json
@@ -106,6 +107,14 @@ class ViewerRefreshTests(unittest.TestCase):
         self.assertFalse((self.results / "summary.json").exists())
         self.assertFalse((self.results / "details.json").exists())
 
+    def test_unchanged_report_is_calculated_once(self):
+        from reporting import server as report_server
+        original = report_server.refresh_history
+        with patch.object(report_server, "refresh_history", wraps=original) as refresh:
+            self.read("summary.json")
+            self.read("summary.json")
+        self.assertEqual(refresh.call_count, 1)
+
     def test_round_order_uses_time_not_directory_name_and_normalizes_timezone(self):
         (self.results / "one").rename(self.results / "z-earliest")
         (self.results / "two").rename(self.results / "a-latest")
@@ -139,6 +148,26 @@ class ViewerRefreshTests(unittest.TestCase):
         with urlopen(self.base + "/results/one/details.json") as response:
             self.assertEqual(response.read(), original)
         self.assertEqual((self.results / "one/details.json").read_bytes(), original)
+
+    def test_only_report_assets_and_results_are_public(self):
+        templates = self.root / "templates"
+        templates.mkdir()
+        (templates / "summary.html").write_text("safe", encoding="utf-8")
+        (self.root / "secret.txt").write_text("must not leak", encoding="utf-8")
+        with urlopen(self.base + "/templates/summary.html") as response:
+            self.assertEqual(response.read(), b"safe")
+            self.assertEqual(response.headers["X-Content-Type-Options"], "nosniff")
+        for path in ("/secret.txt", "/config/model_profiles.json", "/results/one/request.json"):
+            with self.subTest(path=path), self.assertRaises(HTTPError) as caught:
+                urlopen(self.base + path)
+            self.assertEqual(caught.exception.code, 404)
+
+    def test_health_and_read_only_method(self):
+        with urlopen(self.base + "/healthz") as response:
+            self.assertEqual(json.load(response), {"status": "ok"})
+        with self.assertRaises(HTTPError) as caught:
+            urlopen(Request(self.base + "/healthz", method="POST", data=b""))
+        self.assertEqual(caught.exception.code, 405)
 
 
 if __name__ == "__main__":

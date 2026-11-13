@@ -31,7 +31,7 @@ def reevaluate(report_directory: Path):
                     "result_status": "evaluated_locally"})
         result_rows.append(row)
     output["metadata"] = {**output["metadata"], "result_validator": {
-        "type": "deterministic_local", "version": 1}, "reevaluated_at": datetime.now(timezone.utc).isoformat(),
+        "type": "deterministic_local", "version": 2}, "reevaluated_at": datetime.now(timezone.utc).isoformat(),
         "reevaluated_from": str(source), "judge": None, "judge_prompt_sha256": None}
     output_directory = report_directory.with_name(report_directory.name + "_local_validation")
     output_directory.mkdir(parents=True, exist_ok=True)
