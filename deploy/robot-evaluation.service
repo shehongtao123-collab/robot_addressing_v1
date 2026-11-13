@@ -4,10 +4,13 @@ After=network.target
 
 [Service]
 Type=simple
-User=robot-eval
-Group=robot-eval
+# Replace these with: id -un  and  id -gn
+User=deploy-user
+Group=deploy-user
 WorkingDirectory=/opt/robot_addressing_v1
-ExecStart=/opt/robot_addressing_v1/.venv/bin/python /opt/robot_addressing_v1/evaluate.py serve --host 127.0.0.1 --port 8786 --results-directory /opt/robot_addressing_v1/results
+# Replace the first path with the output of:
+# conda run -n py312 python -c 'import sys; print(sys.executable)'
+ExecStart=/home/deploy-user/miniconda3/envs/py312/bin/python /opt/robot_addressing_v1/evaluate.py serve --host 127.0.0.1 --port 8786 --results-directory /opt/robot_addressing_v1/results
 Restart=on-failure
 RestartSec=3
 Environment=PYTHONDONTWRITEBYTECODE=1
@@ -15,7 +18,7 @@ UMask=0027
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=read-only
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true

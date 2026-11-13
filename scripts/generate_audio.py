@@ -210,8 +210,6 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--volume 必须在 0～100 之间")
     if Path(args.playlist).name != args.playlist:
         raise ValueError("--playlist 只能是文件名，不能包含上层路径")
-    if not args.dry_run and not args.workspace_id:
-        raise ValueError("请传入 --workspace-id 或设置 DASHSCOPE_WORKSPACE_ID")
 
 
 def main() -> int:

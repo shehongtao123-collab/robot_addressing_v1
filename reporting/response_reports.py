@@ -62,14 +62,29 @@ def aggregate_rows(rows):
         group = groups.setdefault(key, {"id": row["id"], "conversation_id": row["conversation_id"],
             "user_request": row["user_request"], "expected_text": row["expected_text"],
             "result_type": row["result_type"], "tag": row["tag"], "tests": 0, "passed_count": 0,
+            "input_token_values": [], "output_token_values": [], "latency_values": [],
             "evaluations": []})
         group["tests"] += 1
         group["passed_count"] += bool(row.get("passed"))
+        group["input_token_values"].append(row.get("input_tokens"))
+        group["output_token_values"].append(row.get("output_tokens"))
+        group["latency_values"].append(row.get("latency_seconds"))
         group["evaluations"].append({key: row.get(key) for key in ("round", "source_run_id", "source_round",
-            "passed", "actual_text", "error", "request_anchor", "request_link")})
+            "passed", "actual_text", "error", "input_tokens", "output_tokens", "latency_seconds",
+            "request_anchor", "request_link")})
     for group in groups.values():
         group["pass_rate"] = group["passed_count"] / group["tests"]
         group["request_link"] = group["evaluations"][-1]["request_link"]
+        for field in ("input", "output"):
+            values = group.pop(f"{field}_token_values")
+            complete = all(type(value) is int for value in values)
+            total = sum(values) if complete else None
+            group[f"{field}_tokens"] = total
+            group[f"average_{field}_tokens"] = total / len(values) if complete and values else None
+        latencies = group.pop("latency_values")
+        group["average_latency_seconds"] = (sum(latencies) / len(latencies)
+                                             if latencies and all(type(value) in (int, float)
+                                                                  for value in latencies) else None)
     return list(groups.values())
 
 

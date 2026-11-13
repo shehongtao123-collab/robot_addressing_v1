@@ -37,7 +37,9 @@ def latency_statistics(results):
             continue
         start = tokens // 1000 * 1000
         buckets.setdefault(start, []).append(float(latency))
-        points.append({"id": row.get("id"), "input_tokens": tokens, "latency_seconds": float(latency)})
+        points.append({"id": row.get("id"), "input_tokens": tokens,
+                       "output_tokens": row.get("output_tokens"),
+                       "latency_seconds": float(latency)})
     under_1 = sum(value < 1 for value in latencies)
     from_1_to_2 = sum(1 <= value < 2 for value in latencies)
     at_least_2 = sum(value >= 2 for value in latencies)

@@ -6,7 +6,8 @@ import unittest
 from evaluate import evaluation_tasks
 from evaluation.intent_parser import parse_intents
 from evaluation.response_comparison import build_judge_payload, compare_json, json_needs_semantic_judge, judge_json_result, parse_text_judgment, response_references, result_samples
-from reporting.response_reports import result_history, result_statistics
+from reporting.intent_reports import latency_statistics
+from reporting.response_reports import aggregate_rows, result_history, result_statistics
 
 
 class ResultEvaluationTests(unittest.TestCase):
@@ -89,6 +90,38 @@ class ResultEvaluationTests(unittest.TestCase):
         self.assertEqual(statistics["input_tokens"], 100)
         self.assertEqual(statistics["output_tokens"], 7)
         self.assertEqual(statistics["total_tokens"], 107)
+
+    def test_result_summary_rows_aggregate_tokens_and_preserve_unknown(self):
+        base = {"id": "u001", "conversation_id": "fixture", "user_request": "请求",
+                "expected_text": "答案", "result_type": "text", "tag": "问答",
+                "passed": True, "round": 1, "source_run_id": "run", "source_round": 1,
+                "actual_text": "答案", "error": None, "request_anchor": "one",
+                "request_link": "result_details.html#one"}
+        row = aggregate_rows([{**base, "input_tokens": 100, "output_tokens": 7,
+                               "latency_seconds": 1.0},
+                              {**base, "round": 2, "request_anchor": "two",
+                               "request_link": "result_details.html#two",
+                               "input_tokens": 120, "output_tokens": 8,
+                               "latency_seconds": 2.0}])[0]
+        self.assertEqual((row["input_tokens"], row["output_tokens"]), (220, 15))
+        self.assertEqual((row["average_input_tokens"], row["average_output_tokens"]), (110, 7.5))
+        self.assertEqual(row["average_latency_seconds"], 1.5)
+        unknown = aggregate_rows([{**base, "input_tokens": 100, "output_tokens": 7,
+                                   "latency_seconds": 1.0},
+                                  {**base, "input_tokens": None, "output_tokens": None,
+                                   "latency_seconds": None}])[0]
+        self.assertIsNone(unknown["input_tokens"])
+        self.assertIsNone(unknown["output_tokens"])
+        self.assertIsNone(unknown["average_input_tokens"])
+        self.assertIsNone(unknown["average_output_tokens"])
+        self.assertIsNone(unknown["average_latency_seconds"])
+
+    def test_latency_chart_points_include_output_tokens(self):
+        latency = latency_statistics([{"id": "u001", "input_tokens": 100,
+                                       "output_tokens": 7, "latency_seconds": 1.25}])
+        self.assertEqual(latency["input_token_points"], [{"id": "u001", "input_tokens": 100,
+                                                           "output_tokens": 7,
+                                                           "latency_seconds": 1.25}])
 
 
 if __name__ == "__main__":

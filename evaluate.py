@@ -5,6 +5,22 @@ from collections import Counter
 import json
 from pathlib import Path
 
+
+"""
+重启robot-evaluation服务
+sudo systemctl restart robot-evaluation
+
+查看状态
+sudo systemctl status robot-evaluation --no-pager
+curl http://127.0.0.1:8786/healthz
+
+运行测试
+python evaluate.py run \
+  --model bailian \
+  --dataset datasets/intent_300_v1.jsonl \
+  --rounds 1
+"""
+
 ROOT = Path(__file__).resolve().parent
 DATASET_PATH = ROOT / "datasets" / "conversation.jsonl"
 TEMPLATES_DIR = ROOT / "templates"

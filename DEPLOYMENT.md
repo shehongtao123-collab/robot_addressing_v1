@@ -2,7 +2,7 @@
 
 本文部署的是“只读报告站点”：同事可以浏览六个报告页面，但不能通过网页启动评测、上传数据或修改配置。Python 服务只监听本机回环地址，由 Nginx 对公司内网提供 HTTP 访问；网站不要求账号密码。
 
-下文以 Ubuntu/Debian、安装目录 `/opt/robot_addressing_v1`、服务账户 `robot-eval` 为例。其他发行版需要替换软件安装和防火墙命令。
+下文以 Ubuntu/Debian、安装目录 `/opt/robot_addressing_v1`、你现有的 Conda 环境 `py312` 为例。systemd 直接使用你已有的主机账户，不额外创建服务账户。其他发行版需要替换软件安装和防火墙命令；如果主机环境名不是 `py312`，替换为实际名称。
 
 ## 0. 部署前确认
 
@@ -17,36 +17,40 @@
 
 ```bash
 sudo apt update
-sudo apt install -y python3 python3-venv nginx curl rsync
+sudo apt install -y nginx curl rsync
 ```
 
-## 1. 放置代码和创建服务账户
+## 1. 放置代码并准备 Conda 环境
 
-先通过 Git、SCP 或公司发布系统将项目放到 `/opt/robot_addressing_v1`。不要把本机的 `.git/`、`.venv/`、`.env` 或包含密钥的配置一起复制到主机。
-
-创建不可登录的服务账户（已存在时跳过）：
+先通过 Git、SCP 或公司发布系统将项目放到 `/opt/robot_addressing_v1`。不要把本机的 `.venv/`、`.env` 或包含密钥的配置一起复制到主机。让你准备用于运行服务的账户拥有项目目录，例如当前登录账户：
 
 ```bash
-sudo useradd --system --home-dir /opt/robot_addressing_v1 --shell /usr/sbin/nologin robot-eval
-sudo chown -R root:robot-eval /opt/robot_addressing_v1
-sudo chmod -R o-rwx /opt/robot_addressing_v1
-sudo find /opt/robot_addressing_v1 -type d -exec chmod 750 {} \;
-sudo find /opt/robot_addressing_v1 -type f -exec chmod 640 {} \;
+sudo chown -R "$(id -un):$(id -gn)" /opt/robot_addressing_v1
 ```
 
-创建虚拟环境并恢复执行权限：
+确认现有 Conda 环境；没有 `py312` 时再创建：
 
 ```bash
-sudo python3 -m venv /opt/robot_addressing_v1/.venv
-sudo chown -R root:robot-eval /opt/robot_addressing_v1/.venv
-sudo chmod -R o-rwx /opt/robot_addressing_v1/.venv
+conda env list
+conda create -n py312 python=3.12 -y  # 已存在时不要执行这一行
+conda activate py312
 ```
 
-只运行报告网站时不需要安装 `requirements.txt`：报告服务使用 Python 标准库。如果公司主机还要运行模型评测，再安装完整依赖：
+查看该环境 Python 的绝对路径，后面填写 systemd 时会使用：
 
 ```bash
-sudo /opt/robot_addressing_v1/.venv/bin/python -m pip install -r /opt/robot_addressing_v1/requirements.txt
+conda run -n py312 python -c 'import sys; print(sys.executable)'
 ```
+
+输出通常类似 `/home/你的账户/miniconda3/envs/py312/bin/python`，但必须以主机实际输出为准。systemd 不依赖 `conda activate`，而是直接调用这个绝对路径。
+
+只运行报告网站时不需要安装 `requirements.txt`，因为报告服务使用 Python 标准库。如果公司主机还要运行模型评测，再安装完整依赖：
+
+```bash
+conda run -n py312 python -m pip install -r /opt/robot_addressing_v1/requirements.txt
+```
+
+之前建议使用不可登录账户，是为了限制网站进程的权限：即使服务出现漏洞，该账户也不能交互登录主机。这是一项加固措施，不是 systemd 的要求。公司主机已有受控部署账户时，直接使用该账户即可；注意不要使用 `root` 运行网站。
 
 ## 2. 传输结果文件
 
@@ -59,18 +63,21 @@ rsync -av results/ USER@COMPANY_HOST:/tmp/robot-evaluation-results/
 然后在公司主机执行：
 
 ```bash
-sudo mkdir -p /opt/robot_addressing_v1/results
-sudo rsync -a /tmp/robot-evaluation-results/ /opt/robot_addressing_v1/results/
-sudo chown -R root:robot-eval /opt/robot_addressing_v1/results
-sudo find /opt/robot_addressing_v1/results -type d -exec chmod 750 {} \;
-sudo find /opt/robot_addressing_v1/results -type f -exec chmod 640 {} \;
+mkdir -p /opt/robot_addressing_v1/results
+rsync -a /tmp/robot-evaluation-results/ /opt/robot_addressing_v1/results/
 ```
 
 这些命令默认保留主机上已有的历史批次。只有明确需要让主机与开发机完全镜像时，才手动增加 `--delete`。
 
 ## 3. 安装 systemd 服务
 
-模板默认使用 `/opt/robot_addressing_v1` 和 `robot-eval`。如果实际路径或账户不同，先修改 `deploy/robot-evaluation.service` 中的 `User`、`Group`、`WorkingDirectory`、`ExecStart` 和 `ReadOnlyPaths`。
+安装前必须编辑 `deploy/robot-evaluation.service`：
+
+- `User` 改成 `id -un` 显示的账户。
+- `Group` 改成 `id -gn` 显示的主组。
+- `ExecStart` 的第一个路径改成前面查询到的 Conda 环境 Python 绝对路径。
+- 项目不在 `/opt/robot_addressing_v1` 时，同步修改 `WorkingDirectory`、`ExecStart` 中的项目路径、`--results-directory` 和 `ReadOnlyPaths`。
+- Conda 位于 `/home/...` 时保留 `ProtectHome=read-only`；不要设置成 `ProtectHome=true`，否则 systemd 无法读取 Conda 环境。
 
 ```bash
 cd /opt/robot_addressing_v1
@@ -135,14 +142,13 @@ http://公司主机的固定内网IP/
 
 ### 更新报告
 
-将新的 `results/` 批次同步到主机并恢复权限即可，无需重启服务。同事刷新页面后会看到新报告，服务会根据 `details.json` 的修改时间和大小自动失效缓存。
+将新的 `results/` 批次同步到主机即可，无需重启服务。同事刷新页面后会看到新报告，服务会根据 `details.json` 的修改时间和大小自动失效缓存。
 
 ### 更新代码
 
 更新代码后执行：
 
 ```bash
-sudo chown -R root:robot-eval /opt/robot_addressing_v1
 sudo systemctl restart robot-evaluation
 sudo systemctl status robot-evaluation --no-pager
 sudo nginx -t
@@ -161,14 +167,14 @@ sudo systemctl reload nginx
 1. 复制安全模板为 `config/model_profiles.json`。
 2. 仅在配置中填写模型地址、模型 ID 和环境变量名称。
 3. 将真实 API Key 放在执行评测命令的受控环境变量或公司密钥系统中，不要写入仓库。
-4. 为评测执行账户授予 `results/` 写权限；报告服务账户仍只需要读权限。
+4. 确认当前部署账户对 `results/` 有写权限。
 
 例如：
 
 ```bash
 cp config/model_profiles.example.json config/model_profiles.json
 export OPENAI_API_KEY='从公司密钥系统获取的值'
-.venv/bin/python evaluate.py run --model bailian --dataset datasets/intent_300_v1.jsonl
+conda run -n py312 python evaluate.py run --model bailian --dataset datasets/intent_300_v1.jsonl
 ```
 
 ## 7. 故障排查
